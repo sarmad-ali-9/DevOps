@@ -26,7 +26,8 @@ def fetch_instances():
                         instance_name = tag['Value']
                 for security_groups in instance['SecurityGroups']:
                     security_group_name = security_groups['GroupName']
-                    logging.info("Name of the EC2 Instance: {}".format(instance_name))
+                    if instance_name:
+                        logging.info("Name of the EC2 Instance: {}".format(instance_name))
                     logging.info("ID of the EC2 Instance: {}".format(instance_id))
                     logging.info("Public IP of the EC2 Instance: {}".format(public_ip))
                     logging.info("Private IP of the EC2 Instance: {}".format(private_ip))

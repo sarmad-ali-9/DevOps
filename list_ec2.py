@@ -24,7 +24,10 @@ def fetch_instances():
             for instance in res['Instances']:
                 instance_id = instance['InstanceId']
                 private_ip = instance['PrivateIpAddress']
-                public_ip = instance['PublicIpAddress']
+                if 'PublicIpAddress' in instance.keys():
+                    public_ip = instance['PublicIpAddress']
+                else:
+                    public_ip = 'null'
                 for tag in instance['Tags']:
                     if tag['Key'] == 'Name':
                         instance_name = tag['Value']

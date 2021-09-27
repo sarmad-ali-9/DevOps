@@ -67,10 +67,14 @@ def fetch_security_groups(ec2_instance_client, security_group_name, security_gro
                             to_port = s_g['ToPort']
                         else:
                             to_port = 'null'
-                        for iprange in s_g['IpRanges']:
-                            cidr_ip = iprange['CidrIp']
+                        if 'IpRanges' in s_g.keys():
+                            for iprange in s_g['IpRanges']:
+                                cidr_ip = iprange['CidrIp']
+                                csvWriter = csv.writer(csvfile, delimiter=',')
+                                csvWriter.writerow([instance_id, instance_name, private_ip, security_group_id, security_group_name, from_port,to_port,cidr_ip])
+                        else:
                             csvWriter = csv.writer(csvfile, delimiter=',')
-                            csvWriter.writerow([instance_id, instance_name, private_ip, security_group_id, security_group_name, from_port,to_port,cidr_ip])
+                            csvWriter.writerow([instance_id, instance_name, private_ip, security_group_id, security_group_name, from_port,to_port,'null'])
         except Exception as e:
             logging.error("Unable to write to {}".format(OUTPUT_FILE))
             logging.error(e)

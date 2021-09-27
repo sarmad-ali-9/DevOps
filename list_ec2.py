@@ -1,6 +1,8 @@
 ## Imports ##
 import boto3
+import time
 import logging
+import csv
 
 from sys import exit
 from botocore.exceptions import ClientError
@@ -9,6 +11,8 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 
 ## Global Variables ##
 DESCRIPTION = None
+ts = time.gmtime()
+OUTPUT_FILE = 'ec2_instances' + time.strftime("%Y-%m-%d_%H.%M.%S", ts) + '.csv'
 
 
 def fetch_instances():
@@ -24,17 +28,19 @@ def fetch_instances():
                 for tag in instance['Tags']:
                     if tag['Key'] == 'Name':
                         instance_name = tag['Value']
+                if instance_name:
+                    logging.info("Name of the EC2 Instance: {}".format(instance_name))
+                else:
+                   instance_name = 'null'
+                logging.info("ID of the EC2 Instance: {}".format(instance_id))
+                logging.info("Public IP of the EC2 Instance: {}".format(public_ip))
+                logging.info("Private IP of the EC2 Instance: {}".format(private_ip))
                 for security_groups in instance['SecurityGroups']:
                     security_group_name = security_groups['GroupName']
-                    if instance_name:
-                        logging.info("Name of the EC2 Instance: {}".format(instance_name))
-                    logging.info("ID of the EC2 Instance: {}".format(instance_id))
-                    logging.info("Public IP of the EC2 Instance: {}".format(public_ip))
-                    logging.info("Private IP of the EC2 Instance: {}".format(private_ip))
                     logging.info("Security Group(s) associated with instance {}: {}".format(instance_id, security_groups['GroupName']))
                     if DESCRIPTION == 'detailed':
                         security_group_id = security_groups['GroupId']
-                        fetch_security_groups(ec2_instance_client, security_group_name, security_group_id)
+                        fetch_security_groups(ec2_instance_client, security_group_name, security_group_id, instance_id, private_ip, instance_name)
     except ClientError as ce:
         logging.error("An error ocurred while fetching EC2 instances")
         logging.error(ce)
@@ -44,14 +50,31 @@ def fetch_instances():
         exit(1)
 
 
-def fetch_security_groups(ec2_instance_client, security_group_name, security_group_id):
+def fetch_security_groups(ec2_instance_client, security_group_name, security_group_id, instance_id, private_ip, instance_name='null'):
     logging.info("Getting data for Security Group: {}".format(security_group_name))
     try:
         security_group = ec2_instance_client.describe_security_groups(GroupIds=[security_group_id])
-        for sec_grp in security_group['SecurityGroups']:
-            for s_g in sec_grp['IpPermissions']:
-                logging.info("Detailed description of the IP Permissions is given below:")
-                logging.info(s_g)
+        try:
+            with open(OUTPUT_FILE, 'w') as csvfile:
+                field_Names = ['instance_id', 'instance_name', 'private_ip', 'security_group_id', 'security_group_name', 'from_port', 'to_port', 'cidr_ip']
+                for sec_grp in security_group['SecurityGroups']:
+                    for s_g in sec_grp['IpPermissions']:
+                        if 'FromPort' in s_g.keys():
+                            from_port = s_g['FromPort']
+                        else:
+                            from_port = 'null'
+                        if 'ToPort' in s_g.keys():
+                            to_port = s_g['ToPort']
+                        else:
+                            to_port = 'null'
+                        for iprange in s_g['IpRanges']:
+                            cidr_ip = iprange['CidrIp']
+                            csvWriter = csv.writer(csvfile, delimiter=',')
+                            csvWriter.writerow([instance_id, instance_name, private_ip, security_group_id, security_group_name, from_port,to_port,cidr_ip])
+        except Exception as e:
+            logging.error("Unable to write to {}".format(OUTPUT_FILE))
+            logging.error(e)
+            exit(1)
     except ClientError as ce:
         logging.error("An error ocurred while getting data for security group {}".format(security_group_id))
         logging.error(ce)
@@ -112,3 +135,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

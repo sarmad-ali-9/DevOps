@@ -23,11 +23,8 @@ def fetch_instances():
         for res in instances['Reservations']:
             for instance in res['Instances']:
                 instance_id = instance['InstanceId']
-                private_ip = instance['PrivateIpAddress']
-                if 'PublicIpAddress' in instance.keys():
-                    public_ip = instance['PublicIpAddress']
-                else:
-                    public_ip = 'null'
+                private_ip = check_key(instance, 'PrivateIpAddress')
+                public_ip = check_key(instance, 'PublicIpAddress')
                 for tag in instance['Tags']:
                     if tag['Key'] == 'Name':
                         instance_name = tag['Value']
@@ -58,25 +55,17 @@ def fetch_security_groups(ec2_instance_client, security_group_name, security_gro
     try:
         security_group = ec2_instance_client.describe_security_groups(GroupIds=[security_group_id])
         try:
-            with open(OUTPUT_FILE, 'w') as csvfile:
-                field_Names = ['instance_id', 'instance_name', 'private_ip', 'security_group_id', 'security_group_name', 'from_port', 'to_port', 'cidr_ip']
+            with open(OUTPUT_FILE, 'a', newline='') as csvfile:
+                csvWriter = csv.writer(csvfile, delimiter=',')
                 for sec_grp in security_group['SecurityGroups']:
                     for s_g in sec_grp['IpPermissions']:
-                        if 'FromPort' in s_g.keys():
-                            from_port = s_g['FromPort']
-                        else:
-                            from_port = 'null'
-                        if 'ToPort' in s_g.keys():
-                            to_port = s_g['ToPort']
-                        else:
-                            to_port = 'null'
+                        from_port = check_key(s_g, 'FromPort')
+                        to_port = check_key(s_g, 'ToPort')
                         if 'IpRanges' in s_g.keys():
                             for iprange in s_g['IpRanges']:
                                 cidr_ip = iprange['CidrIp']
-                                csvWriter = csv.writer(csvfile, delimiter=',')
-                                csvWriter.writerow([instance_id, instance_name, private_ip, security_group_id, security_group_name, from_port,to_port,cidr_ip])
+                                csvWriter.writerow([instance_id, instance_name, private_ip, security_group_id, security_group_name, from_port, to_port, cidr_ip])
                         else:
-                            csvWriter = csv.writer(csvfile, delimiter=',')
                             csvWriter.writerow([instance_id, instance_name, private_ip, security_group_id, security_group_name, from_port,to_port,'null'])
         except Exception as e:
             logging.error("Unable to write to {}".format(OUTPUT_FILE))
@@ -91,14 +80,37 @@ def fetch_security_groups(ec2_instance_client, security_group_name, security_gro
         exit(1)
 
 
+def write_csv_header():
+    if DESCRIPTION == 'detailed':
+        try:
+            with open(OUTPUT_FILE, 'a', newline='') as csvfile:
+                field_Names = ['instance_id', 'instance_name', 'private_ip', 'security_group_id', 'security_group_name', 'from_port', 'to_port', 'cidr_ip']
+                writer = csv.DictWriter(csvfile, field_Names)
+                writer.writeheader()
+        except Exception as e:
+            logging.error("Can't add csv header to {}".format(OUTPUT_FILE))
+            exit(1)
+
+
+def check_key(input, key):
+    ret = ''
+    if key in input.keys():
+        ret = input[key]
+    else:
+        ret = 'null'
+
+    return ret
+
+
 def parameters_handler():
     global DESCRIPTION
     parser = ArgumentParser(description='The script list the EC2 Instances with their associated Security Groups.\n\n'
                                         'Script Usage:\n\n'
-                                        '\tpython3 list_ec2.py --detailed or python3 list_ec2.py -d\n'
+                                        '\tpython3 list_ec2.py --detailed  --custom-profile <your_custom_profile> or python3 list_ec2.py -d -c <your_custom_profile>\n'
                                         '\t\tOR\n'
-                                        '\tpython3 list_ec2.py --brief or python3 list_ec2.py -b\n'
+                                        '\tpython3 list_ec2.py --brief --custom-profile <your_custom_profile> or python3 list_ec2.py -b - -c <your_custom_profile>\n'
                                         ,formatter_class=RawTextHelpFormatter)
+    parser.add_argument('-c', '--custom-profile', required=False, help='Custom Profile name to use')
     parser.add_argument('-d', '--detailed', action='store_true', help='Detailed description of the Security Groups')
     parser.add_argument('-b', '--brief', action='store_true', help='Brief description of the Security Groups')
     parser.add_argument('--log', required=False, help='logging level, default is info', default='INFO')
@@ -114,6 +126,9 @@ def parameters_handler():
             logging_level = logging.ERROR
         elif args.log in ['critical', 'CRITICAL']:
             logging_level = logging.CRITICAL
+
+    if args.custom_profile:
+        boto3.setup_default_session(profile_name=args.custom_profile)
 
     if args.detailed:
         DESCRIPTION = 'detailed'
@@ -137,9 +152,9 @@ def parameters_handler():
 
 def main():
     parameters_handler()
+    write_csv_header()
     fetch_instances()
 
 
 if __name__ == '__main__':
     main()
-

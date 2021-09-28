@@ -25,10 +25,12 @@ def fetch_instances():
                 instance_id = instance['InstanceId']
                 private_ip = check_key(instance, 'PrivateIpAddress')
                 public_ip = check_key(instance, 'PublicIpAddress')
+                flag = 0
                 for tag in instance['Tags']:
                     if tag['Key'] == 'Name':
+                        flag = 1
                         instance_name = tag['Value']
-                if instance_name:
+                if flag == 1:
                     logging.info("Name of the EC2 Instance: {}".format(instance_name))
                 else:
                    instance_name = 'null'
